@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Image Puzzle Game</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/1.6.2/axios.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            height: 100vh;
+            margin: 0;
+            padding: 20px;
+            background-color: #f0f0f0;
+        }
+        #puzzle-container {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1px;
+            background-color: #333;
+            padding: 12px;
+            
+            position: relative;
+            max-width: 500px;
+            width: 90vw;
+        }
+        .puzzle-tile {
+            width: 100%;
+            aspect-ratio: 1;
+            object-fit: cover;
+            cursor: pointer;
+            transition: transform 0.2s;
+            
+        }
+        .puzzle-tile:hover {
+            transform: scale(1.02);
+        }
+        .blank-tile {
+            background-color: #666;
+            opacity: 0.8;
+        }
+        #game-info {
+            margin-top: 20px;
+            text-align: center;
+        }
+        #moves-counter {
+            font-size: 1.2em;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        #upload-form {
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        #originalImage {
+            max-width: 350px;
+            max-height: 350px;
+            margin: 20px auto;
+            display: none;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .error-message {
+            color: red;
+            margin: 10px 0;
+        }
+        button {
+            padding: 12px 24px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        .shuffle-btn {
+            background-color: #2196F3;
+        }
+        .shuffle-btn:hover:not(:disabled) {
+            background-color: #1976D2;
+        }
+        .solve-btn {
+            background-color: #9c27b0;
+        }
+        .solve-btn:hover:not(:disabled) {
+            background-color: #7b1fa2;
+        }
+        .control-buttons {
+            margin: 20px 0;
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+        }
+        .solution-controls {
+            display: none;
+            margin-top: 15px;
+            text-align: center;
+        }
+        #solution-status {
+            margin: 10px 0;
+            font-weight: bold;
+        }
+        input[type="file"] {
+            padding: 10px;
+            margin-right: 10px;
+        }
+
+        #congratulations {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(255, 255, 255, 0.95);
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.2);
+            text-align: center;
+            z-index: 1000;
+            animation: popIn 0.5s ease-out;
+        }
+
+        #congratulations h2 {
+            color: #4CAF50;
+            margin-bottom: 1rem;
+            font-size: 2em;
+        }
+
+        #congratulations p {
+            font-size: 1.2em;
+            margin-bottom: 1.5rem;
+        }
+
+        .close-btn {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1em;
+        }
+
+        .solving {
+            pointer-events: none;
+            opacity: 0.7;
+        }
+        
+        #solution-progress {
+            display: none;
+            margin-top: 10px;
+            font-size: 1.2em;
+            color: #2196F3;
+        }
+
+        @keyframes popIn {
+            0% {
+                transform: translate(-50%, -50%) scale(0.5);
+                opacity: 0;
+            }
+            100% {
+                transform: translate(-50%, -50%) scale(1);
+                opacity: 1;
+            }
+        }
+         /* Confetti animation */
+         .confetti {
+            position: fixed;
+            width: 10px;
+            height: 10px;
+            background-color: #f00;
+            animation: confetti-fall 3s linear infinite;
+            z-index: 999;
+        }
+
+        @keyframes confetti-fall {
+            0% {
+                transform: translateY(-100vh) rotate(0deg);
+            }
+            100% {
+                transform: translateY(100vh) rotate(360deg);
+            }
+        }
+    </style>
+</head>
+<body>
+    <form id="upload-form" enctype="multipart/form-data">
+        <input type="file" name="file" accept="image/*" required>
+        <button type="submit">Create Puzzle</button>
+    </form>
+    <div id="congratulations">
+        <h2>🎉 Congratulations! 🎉</h2>
+        <p>You solved the puzzle in <span id="final-moves">0</span> moves!</p>
+        <button class="close-btn" onclick="hideCongratsMessage()">Play Again</button>
+    </div>
+    <div class="error-message" id="error-display"></div>
+    <img id="originalImage" alt="Original image">
+    
+    <div class="control-buttons">
+        <button type="button" id="shuffle-btn" class="shuffle-btn" disabled>Shuffle Puzzle</button>
+        <button type="button" id="solve-btn" class="solve-btn" disabled>Solve with AI</button>
+    </div>
+    
+    <div id="puzzle-container"></div>
+    <div id="game-info">
+        <div id="moves-counter">Moves: 0</div>
+    </div>
+    
+    <div class="solution-controls">
+        <button id="prev-move">Previous</button>
+        <button id="next-move">Next</button>
+        <div id="solution-status">Step 0 of 0</div>
+    </div>
+    <div id="solution-progress"></div>
+    <script>
+        let puzzleTiles = [];
+        let puzzleState = [];
+        let blankIndex = -1;
+        let moveCount = 0;
+        let currentFilename = '';
+        let isPlayingSolution = false;
+        let isPlaying = false;
+        let moveInterval = null;
+
+        document.getElementById('upload-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const errorDisplay = document.getElementById('error-display');
+            const formData = new FormData(this);
+            
+            try {
+                const response = await axios.post('/upload', formData);
+                
+                if (response.data.error) {
+                    throw new Error(response.data.error);
+                }
+                
+                currentFilename = response.data.filename;
+                
+                const originalImage = document.getElementById('originalImage');
+                originalImage.src = '/uploads/' + currentFilename;
+                originalImage.style.display = 'block';
+                
+                document.getElementById('shuffle-btn').disabled = false;
+                errorDisplay.textContent = '';
+            } catch (error) {
+                console.error('Upload error:', error);
+                errorDisplay.textContent = 'Failed to upload image: ' + 
+                    (error.response?.data?.error || error.message);
+            }
+        });
+
+
+        document.getElementById('shuffle-btn').addEventListener('click', async function() {
+            if (!currentFilename) {
+                alert('Please upload an image first');
+                return;
+            }
+
+            const errorDisplay = document.getElementById('error-display');
+            
+            try {
+                const response = await axios.post('/shuffle', {
+                    filename: currentFilename
+                });
+
+                if (response.data.error) {
+                    throw new Error(response.data.error);
+                }
+
+                document.getElementById('originalImage').style.display = 'none';
+                document.getElementById('congratulations').style.display = 'none';
+                
+                puzzleTiles = response.data.tile_paths;
+                puzzleState = response.data.puzzle_state;
+                blankIndex = response.data.blank_index;
+                
+                moveCount = 0;
+                updateMovesCounter();
+
+                document.getElementById('solve-btn').disabled = false;
+                renderPuzzle();
+                errorDisplay.textContent = '';
+            } catch (error) {
+                console.error('Shuffle error:', error);
+                errorDisplay.textContent = 'Failed to create puzzle: ' + 
+                    (error.response?.data?.error || error.message);
+            }
+        });
+                
+         
+        
+        document.getElementById('solve-btn').addEventListener('click', async function() {
+    const progressDiv = document.getElementById('solution-progress');
+    const puzzleContainer = document.getElementById('puzzle-container');
+    const errorDisplay = document.getElementById('error-display');
+
+    try {
+        console.log("Starting solve process...");
+        console.log("Current puzzle state:", puzzleState);
+
+        this.disabled = true;
+        document.getElementById('shuffle-btn').disabled = true;
+        puzzleContainer.classList.add('solving');
+        progressDiv.style.display = 'block';
+        progressDiv.textContent = 'Finding solution...';
+        isPlayingSolution = true;
+
+        const response = await axios.post('/solve', {
+            puzzleState: puzzleState
+        });
+
+        if (!response.data || !response.data.success || !response.data.solution) {
+            throw new Error(response.data.error || 'No solution found');
+        }
+
+        const solutionMoves = response.data.solution;
+        const totalSteps = response.data.steps;
+
+        console.log(`Starting solution animation with ${totalSteps} steps`);
+        progressDiv.textContent = `Solving puzzle: 0/${totalSteps} moves`;
+
+        // Animate solution
+        for (let i = 0; i < solutionMoves.length; i++) {
+            const move = solutionMoves[i];
+            console.log(`Applying move ${i}:`, move);
+            
+            puzzleState = [...move.state];
+            blankIndex = puzzleState.indexOf(0);
+            renderPuzzle();
+            progressDiv.textContent = `Solving puzzle: ${i + 1}/${totalSteps} moves`;
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
+
+        if (isPuzzleSolved()) {
+            moveCount = totalSteps;
+            progressDiv.textContent = `Puzzle solved in ${totalSteps} moves!`;
+            setTimeout(showCongratsMessage, 500);
+        }
+
+    } catch (error) {
+        console.error('Solve error:', error);
+        errorDisplay.textContent = 'Failed to solve puzzle: ' + 
+            (error.response?.data?.error || error.message);
+    } finally {
+        isPlayingSolution = false;
+        document.getElementById('shuffle-btn').disabled = false;
+        this.disabled = false;
+        puzzleContainer.classList.remove('solving');
+    }
+});
+
+        function createConfetti() {
+            const colors = ['#f00', '#0f0', '#00f', '#ff0', '#f0f', '#0ff'];
+            for (let i = 0; i < 50; i++) {
+                const confetti = document.createElement('div');
+                confetti.className = 'confetti';
+                confetti.style.left = Math.random() * 100 + 'vw';
+                confetti.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+                confetti.style.animationDelay = Math.random() * 3 + 's';
+                document.body.appendChild(confetti);
+
+                // Remove confetti after animation
+                setTimeout(() => {
+                    confetti.remove();
+                }, 3000);
+            }
+        }
+
+        function showCongratsMessage() {
+            document.getElementById('final-moves').textContent = moveCount;
+            document.getElementById('congratulations').style.display = 'block';
+            createConfetti();
+        }
+
+        function hideCongratsMessage() {
+            document.getElementById('congratulations').style.display = 'none';
+            document.getElementById('shuffle-btn').disabled = false;
+        
+    
+
+
+
+
+
+        }
+    
+        function moveTile(clickedIndex) {
+            if (!puzzleState) {
+                puzzleState = Array.from({length: 9}, (_, i) => i);
+            }    
+
+            if (isAdjacent(clickedIndex, blankIndex)) {
+                [puzzleTiles[clickedIndex], puzzleTiles[blankIndex]] = 
+                [puzzleTiles[blankIndex], puzzleTiles[clickedIndex]];
+                
+                [puzzleState[clickedIndex], puzzleState[blankIndex]] =
+                [puzzleState[blankIndex], puzzleState[clickedIndex]];
+                
+                blankIndex = clickedIndex;
+                moveCount++;
+                updateMovesCounter();
+                renderPuzzle();
+
+                if (isPuzzleSolved()) {
+                    showCongratsMessage();
+                }
+            }
+        }
+
+        function isAdjacent(index1, index2) {
+            const row1 = Math.floor(index1 / 3);
+            const col1 = index1 % 3;
+            const row2 = Math.floor(index2 / 3);
+            const col2 = index2 % 3;
+            
+            return (Math.abs(row1 - row2) + Math.abs(col1 - col2)) === 1;
+        }
+
+        function isPuzzleSolved() {
+            if (!puzzleState || !Array.isArray(puzzleState) || puzzleState.length !== 9) {
+                
+                return false;
+            }
+            
+            // Convert all values to numbers for comparison
+            return puzzleState.every((value, index) => Number(value) === index);
+        }
+        
+
+        function updateMovesCounter() {
+            document.getElementById('moves-counter').textContent = `Moves: ${moveCount}`;
+        }
+
+        function renderPuzzle() {
+            const container = document.getElementById('puzzle-container');
+            container.innerHTML = '';
+
+            console.log("Rendering puzzle state:", puzzleState);
+            console.log("Rendering tiles:", puzzleTiles);
+    
+            
+            if (!puzzleState || !Array.isArray(puzzleState) || puzzleState.length !== 9) {
+                console.error("Invalid puzzle state in renderPuzzle:", puzzleState);
+                return;
+            }
+            
+            puzzleTiles.forEach((tilePath, index) => {
+                const tile = document.createElement('img');
+                tile.src = tilePath;
+                tile.classList.add('puzzle-tile');
+        
+                if (index === blankIndex) {
+                     tile.classList.add('blank-tile');
+                }
+
+                if (!isPlayingSolution) {
+                    tile.addEventListener('click', () => moveTile(index));
+                }
+        
+                container.appendChild(tile);
+            });
+    }
+    </script>
+</body>
+</html>
